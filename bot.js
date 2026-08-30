@@ -8,13 +8,18 @@ const db = new sqlite3.Database('./workshop.db', (err) => {
     if (err) console.error('خطأ في قاعدة البيانات:', err.message);
 });
 
+// إنشاء الجدول والتأكد من إضافة عمود step أوتوماتيك لو مش موجود
 db.run(`CREATE TABLE IF NOT EXISTS bookings (
     phone TEXT PRIMARY KEY,
     name TEXT,
     status TEXT DEFAULT 'جديد',
     step TEXT DEFAULT 'new',
     date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)`);
+)`, () => {
+    db.run(`ALTER TABLE bookings ADD COLUMN step TEXT DEFAULT 'new'`, (err) => {
+        // لو العمود موجود مسبقاً، تجاهل الخطأ وتكمل عادي
+    });
+});
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
@@ -22,6 +27,7 @@ app.use(express.json());
 
 let globalSock = null;
 
+// لوحة التحكم (Dashboard)
 app.get('/dashboard', (req, res) => {
     const selectedTab = req.query.tab || 'الكل';
 
@@ -30,12 +36,6 @@ app.get('/dashboard', (req, res) => {
 
         const totalCount = rows.length;
         const newCount = rows.filter(r => r.status === 'جديد').length;
-        const designCount = rows.filter(r => r.status === 'جاري تصميم').length;
-        const readyCount = rows.filter(r => r.status === 'جاهز').length;
-        const deliveredCount = rows.filter(r => r.status === 'تم التسليم').length;
-        const noReplyCount = rows.filter(r => r.status === 'لم يرد').length;
-
-        const statuses = ['جديد', 'جاري تصميم', 'جاهز', 'تم التسليم', 'لم يرد'];
         let displayedRows = selectedTab === 'الكل' ? rows : rows.filter(r => r.status === selectedTab);
 
         let html = `
@@ -124,7 +124,7 @@ async function startBot() {
 
         sock.ev.on('creds.update', saveCreds);
 
-        // استقبال الرسائل والرد بذكاء واختصار
+        // استقبال الرسائل والرد باختصار شديد
         sock.ev.on('messages.upsert', async (m) => {
             const msg = m.messages[0];
             if (!msg.message || msg.key.fromMe) return;
@@ -143,12 +143,12 @@ async function startBot() {
                     db.run(`UPDATE bookings SET name = ?, step = 'done' WHERE phone = ?`, [messageText, senderPhone]);
                     await sock.sendMessage(senderPhone, { text: `شكراً يا ${messageText}! ✅ تم تسجيل طلبك بنجاح وهظهر في قسم الطلبات الجديدة.` });
                 } else {
-                    // الرد على الثوابت باختصار شديد
+                    // الرد على الثوابت باختصار
                     let lowerMsg = messageText.toLowerCase();
                     if (lowerMsg.includes('عنوان') || lowerMsg.includes('مكان') || lowerMsg.includes('لوكيشن')) {
-                        await sock.sendMessage(senderPhone, { text: '📍 عنوان الورشة: [اكتب عنوانك هنا بالتفصيل]' });
+                        await sock.sendMessage(senderPhone, { text: '📍 عنوان الورشة: [السواحل واسوان فوق  ماركت مرحبا]' });
                     } else if (lowerMsg.includes('محفظة') || lowerMsg.includes('فودافون') || lowerMsg.includes('انستاباي') || lowerMsg.includes('instapay')) {
-                        await sock.sendMessage(senderPhone, { text: '💳 الدفع عبر فودافون كاش أو إنستاباي على رقم: [رقمك]' });
+                        await sock.sendMessage(senderPhone, { text: '💳 الدفع عبر فودافون كاش أو إنستاباي على رقم: [01208765484]' });
                     } else if (lowerMsg.includes('بكام') || lowerMsg.includes('كام') || lowerMsg.includes('السعر') || lowerMsg.includes('تكلفة')) {
                         await sock.sendMessage(senderPhone, { text: 'الأسعار بتختلف حسب تفاصيل الشغل، وهخلي أستاذ محمود يتابع مع حضرتك بالسعر الدقيق في أقرب وقت.' });
                     } else if (lowerMsg.includes('استلم') || lowerMsg.includes('امت') || lowerMsg.includes('امتى') || lowerMsg.includes('وقت')) {
