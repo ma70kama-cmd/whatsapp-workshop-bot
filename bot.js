@@ -36,7 +36,6 @@ app.get('/dashboard', (req, res) => {
 
         const statuses = ['جديد', 'جاري تصميم', 'جاهز', 'تم التسليم', 'لم يرد'];
 
-        // تصفية الجدول بناءً على التبويب المختار
         let displayedRows = rows;
         if (selectedTab !== 'الكل') {
             displayedRows = rows.filter(r => r.status === selectedTab);
@@ -51,7 +50,6 @@ app.get('/dashboard', (req, res) => {
                 body { font-family: Tahoma, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; direction: rtl; display: flex; gap: 20px; color: #333; }
                 .main-content { flex: 1; display: flex; flex-direction: column; gap: 20px; max-width: calc(100% - 280px); }
                 
-                /* التبويبات العلوية المتفاعلة */
                 .stats-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 15px; }
                 .stat-card { background: white; padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-top: 4px solid #007bff; cursor: pointer; text-decoration: none; color: inherit; transition: transform 0.2s; display: block; }
                 .stat-card:hover { transform: translateY(-3px); }
@@ -65,13 +63,12 @@ app.get('/dashboard', (req, res) => {
                 .stat-card h4 { margin: 0 0 5px 0; font-size: 13px; color: #666; }
                 .stat-card span { font-size: 20px; font-weight: bold; color: #333; }
 
-                /* نموذج الإضافة اليدوية */
-                .manual-box { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-                .manual-box input, .manual-box select { padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px; font-family: Tahoma; font-size: 13px; flex: 1; min-width: 140px; }
-                .manual-box button { background: #28a745; color: white; border: none; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; }
+                /* نموذج الإضافة اليدوية الواضح */
+                .manual-box { background: #fff; padding: 15px 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; border-right: 5px solid #28a745; }
+                .manual-box input, .manual-box select { padding: 9px 12px; border: 1px solid #ced4da; border-radius: 6px; font-family: Tahoma; font-size: 13px; flex: 1; min-width: 150px; }
+                .manual-box button { background: #28a745; color: white; border: none; padding: 9px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; }
                 .manual-box button:hover { background: #218838; }
 
-                /* الجدول الاحترافي */
                 .table-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow-x: auto; }
                 table { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: right; }
                 th { background: #f8f9fa; color: #495057; padding: 12px; font-size: 13px; border-bottom: 2px solid #dee2e6; }
@@ -91,7 +88,6 @@ app.get('/dashboard', (req, res) => {
                 .delete-btn { background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; }
                 .delete-btn:hover { background: #c82333; }
 
-                /* القائمة الجانبية */
                 .sidebar { width: 260px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 10px; height: fit-content; }
                 .sidebar h3 { text-align: center; color: #333; margin-bottom: 0; }
                 .sidebar p { text-align: center; color: #888; font-size: 12px; margin-top: 2px; }
@@ -103,7 +99,7 @@ app.get('/dashboard', (req, res) => {
         <body>
 
             <div class="main-content">
-                <!-- التبويبات العلوية التفاعلية -->
+                <!-- التبويبات العلوية -->
                 <div class="stats-container">
                     <a href="/dashboard?tab=الكل" class="stat-card all ${selectedTab === 'الكل' ? 'active-tab' : ''}">
                         <h4>إجمالي الحجوزات</h4><span>${totalCount}</span>
@@ -128,7 +124,7 @@ app.get('/dashboard', (req, res) => {
                 <!-- زر إضافة أوردر يدوي -->
                 <form class="manual-box" action="/add-manual" method="POST">
                     <input type="text" name="name" placeholder="اسم العميل الجديد" required>
-                    <input type="text" name="phone" placeholder="رقم التليفون" required>
+                    <input type="text" name="phone" placeholder="رقم التليفون (مثال: 010xxxxxxxx)" required>
                     <select name="status">
                         ${statuses.map(s => `<option value="${s}">${s}</option>`).join('')}
                     </select>
@@ -223,7 +219,6 @@ app.get('/dashboard', (req, res) => {
     });
 });
 
-// مسار استقبال الأوردر اليدوي
 app.post('/add-manual', (req, res) => {
     let { phone, name, status } = req.body;
     let formattedPhone = phone.includes('@') ? phone : phone + '@s.whatsapp.net';
