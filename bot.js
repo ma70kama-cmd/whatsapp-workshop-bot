@@ -63,7 +63,6 @@ app.get('/dashboard', (req, res) => {
                 .stat-card h4 { margin: 0 0 5px 0; font-size: 13px; color: #666; }
                 .stat-card span { font-size: 20px; font-weight: bold; color: #333; }
 
-                /* نموذج الإضافة اليدوية الواضح */
                 .manual-box { background: #fff; padding: 15px 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; border-right: 5px solid #28a745; }
                 .manual-box input, .manual-box select { padding: 9px 12px; border: 1px solid #ced4da; border-radius: 6px; font-family: Tahoma; font-size: 13px; flex: 1; min-width: 150px; }
                 .manual-box button { background: #28a745; color: white; border: none; padding: 9px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; }
@@ -99,7 +98,6 @@ app.get('/dashboard', (req, res) => {
         <body>
 
             <div class="main-content">
-                <!-- التبويبات العلوية -->
                 <div class="stats-container">
                     <a href="/dashboard?tab=الكل" class="stat-card all ${selectedTab === 'الكل' ? 'active-tab' : ''}">
                         <h4>إجمالي الحجوزات</h4><span>${totalCount}</span>
@@ -121,7 +119,6 @@ app.get('/dashboard', (req, res) => {
                     </a>
                 </div>
 
-                <!-- زر إضافة أوردر يدوي -->
                 <form class="manual-box" action="/add-manual" method="POST">
                     <input type="text" name="name" placeholder="اسم العميل الجديد" required>
                     <input type="text" name="phone" placeholder="رقم التليفون (مثال: 010xxxxxxxx)" required>
@@ -309,8 +306,12 @@ async function startBot() {
 
             db.get(`SELECT * FROM bookings WHERE phone = ?`, [senderPhone], async (err, row) => {
                 if (!row) {
+                    // لو العميل جديد تماماً، سجله وابعتله رسالة ترحيبية
                     db.run(`INSERT INTO bookings (phone, name, status) VALUES (?, ?, 'جديد')`, [senderPhone, messageText.trim()]);
                     await sock.sendMessage(senderPhone, { text: 'أهلاً بك! تم تسجيل طلبك بنجاح وهنتواصل معاك قريباً.' });
+                } else {
+                    // لو العميل مسجل قبل كده، رد عليه دايماً عشان البوت ما يبقاش صامت
+                    await sock.sendMessage(senderPhone, { text: 'أهلاً بك مجدداً، لقد تلقينا رسالتك وجارٍ متابعة طلبك.' });
                 }
             });
         });
