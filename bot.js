@@ -8,7 +8,6 @@ const db = new sqlite3.Database('./workshop.db', (err) => {
     if (err) console.error('خطأ في قاعدة البيانات:', err.message);
 });
 
-// إنشاء الجدول مع تتبع الخطوات
 db.run(`CREATE TABLE IF NOT EXISTS bookings (
     phone TEXT PRIMARY KEY,
     name TEXT,
@@ -297,7 +296,7 @@ async function startBot() {
 
         sock.ev.on('creds.update', saveCreds);
 
-        // طلب الاسم ورقم التليفون خطوة بخطوة
+        // تعديل قطعي لاستقبال الرسائل مع طباعة لوج في الشاشة للتأكد
         sock.ev.on('messages.upsert', async (m) => {
             const msg = m.messages[0];
             if (!msg.message || msg.key.fromMe) return;
@@ -305,24 +304,21 @@ async function startBot() {
             const senderPhone = msg.key.remoteJid;
             const messageText = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
 
+            console.log(`📩 رسالة مستلمة من [${senderPhone}]: ${messageText}`);
+
             if (!messageText) return;
 
             db.get(`SELECT * FROM bookings WHERE phone = ?`, [senderPhone], async (err, row) => {
                 if (!row) {
-                    // الخطوة 1: العميل جديد تماماً -> نسجله بحالة "جديد" ونطلب اسمه
                     db.run(`INSERT INTO bookings (phone, name, status, step) VALUES (?, 'بدون اسم', 'جديد', 'waiting_name')`, [senderPhone]);
                     await sock.sendMessage(senderPhone, { text: 'أهلاً بك في ورشة الليزر! 🌟\nمن فضلك اكتب **اسمك**:' });
                 } else if (row.step === 'waiting_name') {
-                    // الخطوة 2: حفظ الاسم، وطلب رقم التليفون
                     db.run(`UPDATE bookings SET name = ?, step = 'waiting_phone' WHERE phone = ?`, [messageText, senderPhone]);
                     await sock.sendMessage(senderPhone, { text: `أهلاً بك يا ${messageText} 🤝\nمن فضلك اكتب **رقم تليفونك** للتواصل:` });
                 } else if (row.step === 'waiting_phone') {
-                    // الخطوة 3: حفظ الرقم وتأكيد اكتمال التسجيل (يدخل في الداشبورد تحت خانة جديد بالاسم ورقمه)
-                    // نقدر نخزن الرقم الإضافي أو نكتفي برقم الواتساب، وهنا هنأكد الطلب
                     db.run(`UPDATE bookings SET step = 'done' WHERE phone = ?`, [senderPhone]);
                     await sock.sendMessage(senderPhone, { text: '✅ تم تسجيل أوردرك بنجاح وهيوظهر في قائمة الطلبات الجديدة بالورشة. في انتظارك!' });
                 } else {
-                    // لو العميل مسجل ومخلص خطواته قبل كده
                     await sock.sendMessage(senderPhone, { text: 'أهلاً بك مجدداً، لقد تلقينا رسالتك وجارٍ متابعة طلبك في الورشة.' });
                 }
             });
