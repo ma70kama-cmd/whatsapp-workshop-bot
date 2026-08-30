@@ -54,7 +54,8 @@ app.get('/dashboard', (req, res) => {
                         <h3>${status} (${filteredRows.length})</h3>`;
             
             filteredRows.forEach(row => {
-                let cleanPhone = row.phone.replace('@s.whatsapp.net', '').replace('lid@', '');
+                // استخراج الأرقام الحقيقية فقط بدون أي رموز أو حروف
+                let cleanPhone = row.phone.replace(/[^0-9]/g, '');
                 
                 html += `<div class="card">
                             <b>${row.name || 'بدون اسم'}</b><br>
@@ -151,7 +152,7 @@ async function startBot() {
         }
     });
 
-    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('credes.update', saveCreds);
 
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0];
