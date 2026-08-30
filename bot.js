@@ -8,10 +8,12 @@ const db = new sqlite3.Database('./workshop.db', (err) => {
     if (err) console.error('خطأ في قاعدة البيانات:', err.message);
 });
 
+// إنشاء الجدول مع إضافة حقل للخطوة (step) لتتبع المحادثة
 db.run(`CREATE TABLE IF NOT EXISTS bookings (
     phone TEXT PRIMARY KEY,
     name TEXT,
     status TEXT DEFAULT 'جديد',
+    step TEXT DEFAULT 'new',
     date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )`);
 
@@ -220,7 +222,7 @@ app.post('/add-manual', (req, res) => {
     let { phone, name, status } = req.body;
     let formattedPhone = phone.includes('@') ? phone : phone + '@s.whatsapp.net';
     
-    db.run(`INSERT OR REPLACE INTO bookings (phone, name, status) VALUES (?, ?, ?)`, [formattedPhone, name, status], (err) => {
+    db.run(`INSERT OR REPLACE INTO bookings (phone, name, status, step) VALUES (?, ?, ?, 'done')`, [formattedPhone, name, status], (err) => {
         if (err) console.error('خطأ في الإضافة اليدوية:', err.message);
         res.redirect('/dashboard');
     });
@@ -295,23 +297,28 @@ async function startBot() {
 
         sock.ev.on('creds.update', saveCreds);
 
+        // نظام الرد التفاعلي وطلب الاسم من العميل
         sock.ev.on('messages.upsert', async (m) => {
             const msg = m.messages[0];
             if (!msg.message || msg.key.fromMe) return;
 
             const senderPhone = msg.key.remoteJid;
-            const messageText = msg.message.conversation || msg.message.extendedTextMessage?.text;
+            const messageText = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
 
             if (!messageText) return;
 
             db.get(`SELECT * FROM bookings WHERE phone = ?`, [senderPhone], async (err, row) => {
                 if (!row) {
-                    // لو العميل جديد تماماً، سجله وابعتله رسالة ترحيبية
-                    db.run(`INSERT INTO bookings (phone, name, status) VALUES (?, ?, 'جديد')`, [senderPhone, messageText.trim()]);
-                    await sock.sendMessage(senderPhone, { text: 'أهلاً بك! تم تسجيل طلبك بنجاح وهنتواصل معاك قريباً.' });
+                    // عميل جديد تماماً -> نسجله في خطوة "انتظار الاسم" ونطلب منه اسمه
+                    db.run(`INSERT INTO bookings (phone, name, status, step) VALUES (?, 'بدون اسم', 'جديد', 'waiting_name')`, [senderPhone]);
+                    await sock.sendMessage(senderPhone, { text: 'أهلاً بك في ورشة الليزر! 🌟\nمن فضلك اكتب **اسمك** عشان نسجل طلبك بشكل صحيح:' });
+                } else if (row.step === 'waiting_name') {
+                    // العميل رد بالاسم -> نحفظ الاسم ونحول خطوته إلى "منتهي" (done)
+                    db.run(`UPDATE bookings SET name = ?, step = 'done' WHERE phone = ?`, [messageText, senderPhone]);
+                    await sock.sendMessage(senderPhone, { text: `تشرفنا يا ${messageText}! 🤝\nتم تسجيل طلبك بنجاح وهنتواصل معاك في أقرب وقت.` });
                 } else {
-                    // لو العميل مسجل قبل كده، رد عليه دايماً عشان البوت ما يبقاش صامت
-                    await sock.sendMessage(senderPhone, { text: 'أهلاً بك مجدداً، لقد تلقينا رسالتك وجارٍ متابعة طلبك.' });
+                    // العميل مسجل واسمه معروف من قبل
+                    await sock.sendMessage(senderPhone, { text: 'أهلاً بك مجدداً، لقد تلقينا رسالتك وجارٍ متابعة طلبك في الورشة.' });
                 }
             });
         });
