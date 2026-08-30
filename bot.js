@@ -3,11 +3,6 @@ const { Boom } = require('@hapi/boom');
 const pino = require('pino');
 const sqlite3 = require('sqlite3').verbose();
 const express = require('express');
-const { GoogleGenAI } = require('@google/genai');
-
-// إعداد الذكاء الاصطناعي المجاني (Gemini)
-// حط مفتاح الـ API الخاص بيك هنا أو كمتغير بيئة
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || 'YOUR_GEMINI_API_KEY' });
 
 const db = new sqlite3.Database('./workshop.db', (err) => {
     if (err) console.error('خطأ في قاعدة البيانات:', err.message);
@@ -27,7 +22,6 @@ app.use(express.json());
 
 let globalSock = null;
 
-// الداشبورد
 app.get('/dashboard', (req, res) => {
     const selectedTab = req.query.tab || 'الكل';
 
@@ -130,7 +124,7 @@ async function startBot() {
 
         sock.ev.on('creds.update', saveCreds);
 
-        // استقبال الرسائل وتوجيهها للذكاء الاصطناعي
+        // استقبال الرسائل والرد بذكاء واختصار
         sock.ev.on('messages.upsert', async (m) => {
             const msg = m.messages[0];
             if (!msg.message || msg.key.fromMe) return;
@@ -141,39 +135,26 @@ async function startBot() {
 
             db.get(`SELECT * FROM bookings WHERE phone = ?`, [senderPhone], async (err, row) => {
                 if (!row) {
-                    // عميل جديد تماماً: نطلب منه الاسم ورقم التليفون
+                    // عميل جديد تماماً: نطلب منه الاسم والرقم
                     db.run(`INSERT INTO bookings (phone, name, status, step) VALUES (?, 'بدون اسم', 'جديد', 'waiting_info')`, [senderPhone]);
-                    await sock.sendMessage(senderPhone, { text: 'أهلاً بك في ورشة الليزر! 🌟\nمن فضلك اكتب **اسمك** و**رقم تليفونك** في رسالة واحدة عشان نسجل طلبك.' });
+                    await sock.sendMessage(senderPhone, { text: 'أهلاً بك في الورشة! 🌟\nمن فضلك اكتب **اسمك** و**رقم تليفونك** في رسالة واحدة عشان نسجل طلبك.' });
                 } else if (row.step === 'waiting_info') {
-                    // استخدام الذكاء الاصطناعي لاستخراج الاسم والرقم من كلام العميل
-                    try {
-                        const response = await ai.models.generateContent({
-                            model: 'gemini-2.5-flash',
-                            contents: `استخرج من النص التالي اسم العميل ورقم تليفونه بدقة، واكتبهم بصيغة JSON فقط كالتالي: {"name": "الاسم", "phone_number": "الرقم"}. النص: "${messageText}"`
-                        });
-                        
-                        let textRes = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
-                        let parsed = JSON.parse(textRes);
-
-                        let clientName = parsed.name || messageText;
-                        let clientPhone = parsed.phone_number || senderPhone;
-
-                        db.run(`UPDATE bookings SET name = ?, step = 'done' WHERE phone = ?`, [clientName, senderPhone]);
-                        await sock.sendMessage(senderPhone, { text: `شكراً يا ${clientName}! ✅ تم تسجيل طلبك بنجاح في قسم الطلبات الجديدة بالورشة.` });
-                    } catch (e) {
-                        // لو حصل أي خطأ في الذكاء الاصطناعي، نحفظ النص كاسم احتياطي
-                        db.run(`UPDATE bookings SET name = ?, step = 'done' WHERE phone = ?`, [messageText, senderPhone]);
-                        await sock.sendMessage(senderPhone, { text: `تم تسجيل طلبك يا ${messageText}! سنتواصل معك قريباً.` });
-                    }
+                    // حفظ النص المدخل كاسم للعميل وتسجيله في الداشبورد
+                    db.run(`UPDATE bookings SET name = ?, step = 'done' WHERE phone = ?`, [messageText, senderPhone]);
+                    await sock.sendMessage(senderPhone, { text: `شكراً يا ${messageText}! ✅ تم تسجيل طلبك بنجاح وهظهر في قسم الطلبات الجديدة.` });
                 } else {
-                    // الرد على الثوابت أو الاستفسارات العامة بالذكاء الاصطناعي
+                    // الرد على الثوابت باختصار شديد
                     let lowerMsg = messageText.toLowerCase();
                     if (lowerMsg.includes('عنوان') || lowerMsg.includes('مكان') || lowerMsg.includes('لوكيشن')) {
                         await sock.sendMessage(senderPhone, { text: '📍 عنوان الورشة: [اكتب عنوانك هنا بالتفصيل]' });
                     } else if (lowerMsg.includes('محفظة') || lowerMsg.includes('فودافون') || lowerMsg.includes('انستاباي') || lowerMsg.includes('instapay')) {
-                        await sock.sendMessage(senderPhone, { text: '💳 الدفع متاح من خلال:\n- فودافون كاش على رقم: [رقمك]\n- إنستاباي (InstaPay): [حسابك]' });
+                        await sock.sendMessage(senderPhone, { text: '💳 الدفع عبر فودافون كاش أو إنستاباي على رقم: [رقمك]' });
+                    } else if (lowerMsg.includes('بكام') || lowerMsg.includes('كام') || lowerMsg.includes('السعر') || lowerMsg.includes('تكلفة')) {
+                        await sock.sendMessage(senderPhone, { text: 'الأسعار بتختلف حسب تفاصيل الشغل، وهخلي أستاذ محمود يتابع مع حضرتك بالسعر الدقيق في أقرب وقت.' });
+                    } else if (lowerMsg.includes('استلم') || lowerMsg.includes('امت') || lowerMsg.includes('امتى') || lowerMsg.includes('وقت')) {
+                        await sock.sendMessage(senderPhone, { text: 'المعتاد من 2 لـ 3 أيام حسب ضغط الشغل، وهنبعتلك أول ما يخلص.' });
                     } else {
-                        await sock.sendMessage(senderPhone, { text: 'أهلاً بك مجدداً! طلبك مسجل عندنا ومتابعين معاك، لو محتاج العنوان أو أرقام الدفع اسألني وهرد عليك فورا.' });
+                        await sock.sendMessage(senderPhone, { text: 'طلبك مسجل عندنا، ومتابعينه معاك يا فندم.' });
                     }
                 }
             });
