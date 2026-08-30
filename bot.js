@@ -22,6 +22,8 @@ app.use(express.json());
 let globalSock = null;
 
 app.get('/dashboard', (req, res) => {
+    const selectedTab = req.query.tab || 'الكل';
+
     db.all(`SELECT * FROM bookings ORDER BY date DESC`, [], (err, rows) => {
         if (err) return res.status(500).send('خطأ في جلب البيانات');
 
@@ -34,6 +36,12 @@ app.get('/dashboard', (req, res) => {
 
         const statuses = ['جديد', 'جاري تصميم', 'جاهز', 'تم التسليم', 'لم يرد'];
 
+        // تصفية الجدول بناءً على التبويب المختار
+        let displayedRows = rows;
+        if (selectedTab !== 'الكل') {
+            displayedRows = rows.filter(r => r.status === selectedTab);
+        }
+
         let html = `
         <html lang="ar" dir="rtl">
         <head>
@@ -43,15 +51,25 @@ app.get('/dashboard', (req, res) => {
                 body { font-family: Tahoma, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; direction: rtl; display: flex; gap: 20px; color: #333; }
                 .main-content { flex: 1; display: flex; flex-direction: column; gap: 20px; max-width: calc(100% - 280px); }
                 
-                /* الإحصائيات */
+                /* التبويبات العلوية المتفاعلة */
                 .stats-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 15px; }
-                .stat-card { background: white; padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-top: 4px solid #007bff; }
+                .stat-card { background: white; padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-top: 4px solid #007bff; cursor: pointer; text-decoration: none; color: inherit; transition: transform 0.2s; display: block; }
+                .stat-card:hover { transform: translateY(-3px); }
+                .stat-card.active-tab { background: #e7f1ff; box-shadow: 0 0 0 2px #007bff; }
+                .stat-card.all { border-top-color: #007bff; }
                 .stat-card.new { border-top-color: #17a2b8; }
                 .stat-card.design { border-top-color: #ffc107; }
                 .stat-card.ready { border-top-color: #28a745; }
                 .stat-card.delivered { border-top-color: #6f42c1; }
+                .stat-card.noreply { border-top-color: #dc3545; }
                 .stat-card h4 { margin: 0 0 5px 0; font-size: 13px; color: #666; }
                 .stat-card span { font-size: 20px; font-weight: bold; color: #333; }
+
+                /* نموذج الإضافة اليدوية */
+                .manual-box { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+                .manual-box input, .manual-box select { padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px; font-family: Tahoma; font-size: 13px; flex: 1; min-width: 140px; }
+                .manual-box button { background: #28a745; color: white; border: none; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; }
+                .manual-box button:hover { background: #218838; }
 
                 /* الجدول الاحترافي */
                 .table-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow-x: auto; }
@@ -85,17 +103,40 @@ app.get('/dashboard', (req, res) => {
         <body>
 
             <div class="main-content">
+                <!-- التبويبات العلوية التفاعلية -->
                 <div class="stats-container">
-                    <div class="stat-card"><h4>إجمالي الحجوزات</h4><span>${totalCount}</span></div>
-                    <div class="stat-card new"><h4>الحجوزات الجديدة</h4><span>${newCount}</span></div>
-                    <div class="stat-card design"><h4>خلص التصميم</h4><span>${designCount}</span></div>
-                    <div class="stat-card ready"><h4>جاهزة</h4><span>${readyCount}</span></div>
-                    <div class="stat-card delivered"><h4>تم التسليم</h4><span>${deliveredCount}</span></div>
-                    <div class="stat-card" style="border-top-color: #dc3545;"><h4>لم يرد</h4><span>${noReplyCount}</span></div>
+                    <a href="/dashboard?tab=الكل" class="stat-card all ${selectedTab === 'الكل' ? 'active-tab' : ''}">
+                        <h4>إجمالي الحجوزات</h4><span>${totalCount}</span>
+                    </a>
+                    <a href="/dashboard?tab=جديد" class="stat-card new ${selectedTab === 'جديد' ? 'active-tab' : ''}">
+                        <h4>الحجوزات الجديدة</h4><span>${newCount}</span>
+                    </a>
+                    <a href="/dashboard?tab=جاري تصميم" class="stat-card design ${selectedTab === 'جاري تصميم' ? 'active-tab' : ''}">
+                        <h4>خلص التصميم</h4><span>${designCount}</span>
+                    </a>
+                    <a href="/dashboard?tab=جاهز" class="stat-card ready ${selectedTab === 'جاهز' ? 'active-tab' : ''}">
+                        <h4>جاهزة</h4><span>${readyCount}</span>
+                    </a>
+                    <a href="/dashboard?tab=تم التسليم" class="stat-card delivered ${selectedTab === 'تم التسليم' ? 'active-tab' : ''}">
+                        <h4>تم التسليم</h4><span>${deliveredCount}</span>
+                    </a>
+                    <a href="/dashboard?tab=لم يرد" class="stat-card noreply ${selectedTab === 'لم يرد' ? 'active-tab' : ''}">
+                        <h4>لم يرد</h4><span>${noReplyCount}</span>
+                    </a>
                 </div>
 
+                <!-- زر إضافة أوردر يدوي -->
+                <form class="manual-box" action="/add-manual" method="POST">
+                    <input type="text" name="name" placeholder="اسم العميل الجديد" required>
+                    <input type="text" name="phone" placeholder="رقم التليفون" required>
+                    <select name="status">
+                        ${statuses.map(s => `<option value="${s}">${s}</option>`).join('')}
+                    </select>
+                    <button type="submit">➕ إضافة أوردر يدوي</button>
+                </form>
+
                 <div class="table-card">
-                    <h3 style="margin-top:0; color:#333; font-size: 16px;">📦 طلبات وتفاصيل حجز الزوار</h3>
+                    <h3 style="margin-top:0; color:#333; font-size: 16px;">📦 الطلبات في قسم: <span style="color:#007bff;">${selectedTab}</span> (${displayedRows.length})</h3>
                     <table>
                         <thead>
                             <tr>
@@ -108,10 +149,10 @@ app.get('/dashboard', (req, res) => {
                         </thead>
                         <tbody>`;
 
-        if (rows.length === 0) {
-            html += `<tr><td colspan="5" style="text-align: center; color: #888; padding: 20px;">لا توجد أي أوردرات مسجلة حتى الآن</td></tr>`;
+        if (displayedRows.length === 0) {
+            html += `<tr><td colspan="5" style="text-align: center; color: #888; padding: 20px;">لا توجد أي أوردرات في هذا القسم حالياً</td></tr>`;
         } else {
-            rows.forEach(row => {
+            displayedRows.forEach(row => {
                 let cleanPhone = row.phone.replace(/[^0-9]/g, '');
                 let badgeClass = 'badge-' + row.status.replace(/\s+/g, '_');
                 
@@ -146,7 +187,7 @@ app.get('/dashboard', (req, res) => {
                 <p>tal5es v1</p>
                 <hr style="border:0; border-top:1px solid #eee; margin:5px 0;">
                 <button class="sidebar-btn">✏️ تعديل الاستمارة</button>
-                <button class="sidebar-btn active">📊 الطلبات (${totalCount})</button>
+                <a href="/dashboard?tab=الكل" class="sidebar-btn active" style="text-decoration:none;">📊 الطلبات (${totalCount})</a>
                 <button class="sidebar-btn">📂 الأقسام الإضافية</button>
                 <button class="sidebar-btn">⚙️ بيانات المدير</button>
                 <br>
@@ -179,6 +220,17 @@ app.get('/dashboard', (req, res) => {
         </html>`;
 
         res.send(html);
+    });
+});
+
+// مسار استقبال الأوردر اليدوي
+app.post('/add-manual', (req, res) => {
+    let { phone, name, status } = req.body;
+    let formattedPhone = phone.includes('@') ? phone : phone + '@s.whatsapp.net';
+    
+    db.run(`INSERT OR REPLACE INTO bookings (phone, name, status) VALUES (?, ?, ?)`, [formattedPhone, name, status], (err) => {
+        if (err) console.error('خطأ في الإضافة اليدوية:', err.message);
+        res.redirect('/dashboard');
     });
 });
 
