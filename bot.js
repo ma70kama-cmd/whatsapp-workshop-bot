@@ -8,7 +8,7 @@ const db = new sqlite3.Database('./workshop.db', (err) => {
     if (err) console.error('خطأ في قاعدة البيانات:', err.message);
 });
 
-// إنشاء الجدول والتأكد من إضافة عمود step أوتوماتيك لو مش موجود
+// إنشاء الجدول وتأكيد إضافة عمود step أوتوماتيك لو مش موجود
 db.run(`CREATE TABLE IF NOT EXISTS bookings (
     phone TEXT PRIMARY KEY,
     name TEXT,
@@ -16,9 +16,7 @@ db.run(`CREATE TABLE IF NOT EXISTS bookings (
     step TEXT DEFAULT 'new',
     date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )`, () => {
-    db.run(`ALTER TABLE bookings ADD COLUMN step TEXT DEFAULT 'new'`, (err) => {
-        // لو العمود موجود مسبقاً، تجاهل الخطأ وتكمل عادي
-    });
+    db.run(`ALTER TABLE bookings ADD COLUMN step TEXT DEFAULT 'new'`, (err) => {});
 });
 
 const app = express();
@@ -27,7 +25,7 @@ app.use(express.json());
 
 let globalSock = null;
 
-// لوحة التحكم (Dashboard)
+// لوحة التحكم الكاملة والمظبوطة
 app.get('/dashboard', (req, res) => {
     const selectedTab = req.query.tab || 'الكل';
 
@@ -36,6 +34,11 @@ app.get('/dashboard', (req, res) => {
 
         const totalCount = rows.length;
         const newCount = rows.filter(r => r.status === 'جديد').length;
+        const designCount = rows.filter(r => r.status === 'جاري تصميم').length;
+        const readyCount = rows.filter(r => r.status === 'جاهز').length;
+        const deliveredCount = rows.filter(r => r.status === 'تم التسليم').length;
+        const noReplyCount = rows.filter(r => r.status === 'لم يرد').length;
+
         let displayedRows = selectedTab === 'الكل' ? rows : rows.filter(r => r.status === selectedTab);
 
         let html = `
@@ -49,12 +52,18 @@ app.get('/dashboard', (req, res) => {
                 .stats-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 15px; }
                 .stat-card { background: white; padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-top: 4px solid #007bff; text-decoration: none; color: inherit; display: block; }
                 .stat-card.active-tab { background: #e7f1ff; box-shadow: 0 0 0 2px #007bff; }
+                .stat-card h4 { margin: 0 0 5px 0; font-size: 14px; color: #555; }
+                .stat-card span { font-size: 20px; font-weight: bold; color: #007bff; }
                 .table-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow-x: auto; }
                 table { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: right; }
                 th { background: #f8f9fa; padding: 12px; border-bottom: 2px solid #dee2e6; font-size: 13px; }
                 td { padding: 12px; border-bottom: 1px solid #dee2e6; font-size: 13px; }
-                .badge { padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; }
+                .badge { padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; display: inline-block; }
                 .badge-جديد { background: #e0f7fa; color: #006064; }
+                .badge-جاري تصميم { background: #fff3e0; color: #e65100; }
+                .badge-جاهز { background: #e8f5e9; color: #2e7d32; }
+                .badge-تم التسليم { background: #f3e5f5; color: #7b1fa2; }
+                .badge-لم يرد { background: #ffebee; color: #c62828; }
                 .whatsapp-link { color: #25d366; text-decoration: none; font-weight: bold; }
             </style>
         </head>
@@ -63,6 +72,10 @@ app.get('/dashboard', (req, res) => {
                 <div class="stats-container">
                     <a href="/dashboard?tab=الكل" class="stat-card ${selectedTab === 'الكل' ? 'active-tab' : ''}"><h4>الكل</h4><span>${totalCount}</span></a>
                     <a href="/dashboard?tab=جديد" class="stat-card ${selectedTab === 'جديد' ? 'active-tab' : ''}"><h4>جديد</h4><span>${newCount}</span></a>
+                    <a href="/dashboard?tab=جاري تصميم" class="stat-card ${selectedTab === 'جاري تصميم' ? 'active-tab' : ''}"><h4>جاري تصميم</h4><span>${designCount}</span></a>
+                    <a href="/dashboard?tab=جاهز" class="stat-card ${selectedTab === 'جاهز' ? 'active-tab' : ''}"><h4>جاهز</h4><span>${readyCount}</span></a>
+                    <a href="/dashboard?tab=تم التسليم" class="stat-card ${selectedTab === 'تم التسليم' ? 'active-tab' : ''}"><h4>تم التسليم</h4><span>${deliveredCount}</span></a>
+                    <a href="/dashboard?tab=لم يرد" class="stat-card ${selectedTab === 'لم يرد' ? 'active-tab' : ''}"><h4>لم يرد</h4><span>${noReplyCount}</span></a>
                 </div>
                 <div class="table-card">
                     <h3>الطلبات (${displayedRows.length})</h3>
@@ -71,7 +84,7 @@ app.get('/dashboard', (req, res) => {
                         <tbody>`;
         
         if (displayedRows.length === 0) {
-            html += `<tr><td colspan="3" style="text-align:center; color:#888;">لا توجد طلبات حالياً</td></tr>`;
+            html += `<tr><td colspan="3" style="text-align:center; color:#888;">لا توجد طلبات في هذا القسم حالياً</td></tr>`;
         } else {
             displayedRows.forEach(row => {
                 let cleanPhone = row.phone.replace(/[^0-9]/g, '');
@@ -146,9 +159,9 @@ async function startBot() {
                     // الرد على الثوابت باختصار
                     let lowerMsg = messageText.toLowerCase();
                     if (lowerMsg.includes('عنوان') || lowerMsg.includes('مكان') || lowerMsg.includes('لوكيشن')) {
-                        await sock.sendMessage(senderPhone, { text: '📍 عنوان الورشة: [السواحل واسوان فوق  ماركت مرحبا]' });
+                        await sock.sendMessage(senderPhone, { text: '📍 عنوان الورشة: [اكتب عنوانك هنا بالتفصيل]' });
                     } else if (lowerMsg.includes('محفظة') || lowerMsg.includes('فودافون') || lowerMsg.includes('انستاباي') || lowerMsg.includes('instapay')) {
-                        await sock.sendMessage(senderPhone, { text: '💳 الدفع عبر فودافون كاش أو إنستاباي على رقم: [01208765484]' });
+                        await sock.sendMessage(senderPhone, { text: '💳 الدفع عبر فودافون كاش أو إنستاباي على رقم: [رقمك]' });
                     } else if (lowerMsg.includes('بكام') || lowerMsg.includes('كام') || lowerMsg.includes('السعر') || lowerMsg.includes('تكلفة')) {
                         await sock.sendMessage(senderPhone, { text: 'الأسعار بتختلف حسب تفاصيل الشغل، وهخلي أستاذ محمود يتابع مع حضرتك بالسعر الدقيق في أقرب وقت.' });
                     } else if (lowerMsg.includes('استلم') || lowerMsg.includes('امت') || lowerMsg.includes('امتى') || lowerMsg.includes('وقت')) {
